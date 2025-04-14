@@ -142,6 +142,7 @@ dependencies {
     implementation(libs.lmbda)
     implementation(libs.asm)
     implementation(libs.bundles.flare)
+    implementation("org.mongodb:mongodb-driver-sync:5.4.0")
     compileOnly(libs.spotbugs.annotations)
     compileOnly(libs.auto.service.annotations)
     testImplementation(libs.mockito)

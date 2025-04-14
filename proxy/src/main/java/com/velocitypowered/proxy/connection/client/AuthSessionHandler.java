@@ -44,7 +44,6 @@ import com.velocitypowered.proxy.protocol.packet.LoginAcknowledgedPacket;
 import com.velocitypowered.proxy.protocol.packet.ServerLoginSuccessPacket;
 import com.velocitypowered.proxy.protocol.packet.ServerboundCookieResponsePacket;
 import com.velocitypowered.proxy.protocol.packet.SetCompressionPacket;
-import com.velocitypowered.proxy.redis.multiproxy.RedisPlayerSetTransferringRequest;
 import io.netty.buffer.ByteBuf;
 import java.util.Objects;
 import java.util.Optional;
@@ -320,7 +319,6 @@ public class AuthSessionHandler implements MinecraftSessionHandler {
         return;
       }
       player.createConnectionRequest(toTry.get()).fireAndForget();
-      this.server.getRedisManager().send(new RedisPlayerSetTransferringRequest(player.getUniqueId(), false, null));
     }, mcConnection.eventLoop());
   }
 

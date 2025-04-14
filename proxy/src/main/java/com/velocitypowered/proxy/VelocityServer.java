@@ -77,7 +77,6 @@ import com.velocitypowered.proxy.queue.QueueManagerNoRedisImpl;
 import com.velocitypowered.proxy.queue.QueueManagerRedisImpl;
 import com.velocitypowered.proxy.redis.RedisManagerImpl;
 import com.velocitypowered.proxy.redis.multiproxy.MultiProxyHandler;
-import com.velocitypowered.proxy.redis.multiproxy.RedisPlayerSetTransferringRequest;
 import com.velocitypowered.proxy.scheduler.VelocityScheduler;
 import com.velocitypowered.proxy.server.ServerMap;
 import com.velocitypowered.proxy.util.AddressUtil;
@@ -845,17 +844,6 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
             player.disconnect(reason);
           }
           return;
-        }
-
-        for (ConnectedPlayer player : players) {
-          if (player.getProtocolVersion().noLessThan(ProtocolVersion.MINECRAFT_1_20_5)) {
-            String connectedServer = player.getConnectedServer() != null ? player.getConnectedServer().getServerInfo().getName() : null;
-
-            if (this.getMultiProxyHandler().isRedisEnabled()) {
-              getRedisManager().send(new RedisPlayerSetTransferringRequest(player.getUniqueId(), true,
-                  connectedServer));
-            }
-          }
         }
 
         try {

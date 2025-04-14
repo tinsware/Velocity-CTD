@@ -364,6 +364,10 @@ username = ""
 password = ""
 use-ssl = false
 
+# The connection string to connect to MongoDB. MongoDB is used to cache all player information between proxies.
+# A connection string is usually built up of: 'mongodb://USERNAME:PASSWORD@IP:PORT/'.
+mongodb-connection-string = ""
+
 # Maximum number of maintained connections to the Redis server.
 #
 # We encourage leaving this at "50," as having an absurd number
@@ -498,3 +502,13 @@ port = 25565
 proxy-id = "Proxy-2"
 ip = "127.0.0.1"
 port = 25566
+
+
+[favicons]
+# This allows you to assign different server icons per domain.
+# This is especially useful if you have different domains pointing to your network,
+# and you're looking for different logos per domain.
+
+[favicons.Example]
+ip = "play.example.com"
+path = "example-icon.png"

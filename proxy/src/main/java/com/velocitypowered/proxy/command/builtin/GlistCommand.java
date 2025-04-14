@@ -128,7 +128,7 @@ public class GlistCommand {
   }
 
   private void sendTotalProxyCount(final CommandSource target) {
-    final int online;
+    final long online;
 
     if (server.getMultiProxyHandler().isRedisEnabled()) {
       online = server.getMultiProxyHandler().getTotalPlayerCount();
@@ -141,7 +141,7 @@ public class GlistCommand {
                   ? "velocity.command.glist-player-singular"
                   : "velocity.command.glist-player-plural"
             ).color(NamedTextColor.YELLOW)
-            .arguments(Component.text(Integer.toString(online)));
+            .arguments(Component.text(Integer.toString((int) online)));
     target.sendMessage(msg.build());
   }
 

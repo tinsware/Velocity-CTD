@@ -151,13 +151,13 @@ public class BungeeCordMessageResponder {
         out.writeUTF("PlayerCount");
         out.writeUTF("ALL");
 
-        int amount;
+        long amount;
         if (proxy.getMultiProxyHandler().isRedisEnabled()) {
           amount = proxy.getMultiProxyHandler().getTotalPlayerCount();
         } else {
           amount = proxy.getPlayerCount();
         }
-        out.writeInt(amount);
+        out.writeInt((int) amount);
       } else {
         proxy.getServer(target).ifPresent(rs -> {
           out.writeUTF("PlayerCount");

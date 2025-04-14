@@ -101,7 +101,7 @@ public final class VelocityConfiguration implements ProxyConfig {
   private final Queue queue;
   @Expose
   private boolean enablePlayerAddressLogging = true;
-  private @Nullable Favicon favicon;
+  private @Nullable Map<String, Favicon> favicons = new HashMap<>();
   @Expose
   private boolean forceKeyAuthentication = true; // Added in 1.19
   @Expose
@@ -154,7 +154,8 @@ public final class VelocityConfiguration implements ProxyConfig {
                                 final boolean logOfflineConnections, final boolean disableForge, final boolean enforceChatSigning,
                                 final boolean translateHeaderFooter, final boolean logMinimumVersion, final String minimumVersion, final Redis redis,
                                 final Queue queue, final Map<String, List<String>> slashServers, final List<ServerLink> serverLinks,
-                                final List<ProxyAddress> proxyAddresses, final String dynamicProxyFilter, final Map<String, Integer> playerCaps) {
+                                final List<ProxyAddress> proxyAddresses, final String dynamicProxyFilter, final Map<String, Integer> playerCaps,
+                                final Map<String, Favicon> favicons) {
     this.bind = bind;
     this.motd = motd;
     this.motdHover = motdHover;
@@ -189,6 +190,7 @@ public final class VelocityConfiguration implements ProxyConfig {
     this.proxyAddresses = proxyAddresses;
     this.dynamicProxyFilter = dynamicProxyFilter;
     this.playerCaps = playerCaps;
+    this.favicons = favicons;
   }
 
   /**
@@ -351,11 +353,18 @@ public final class VelocityConfiguration implements ProxyConfig {
     Path faviconPath = Path.of("server-icon.png");
     if (Files.exists(faviconPath)) {
       try {
-        this.favicon = Favicon.create(faviconPath);
+        if (this.favicons == null) {
+          this.favicons = new HashMap<>();
+        }
+        this.favicons.put("default", Favicon.create(faviconPath));
       } catch (Exception e) {
         logger.info("Unable to load your server-icon.png, continuing without it.", e);
       }
     }
+  }
+
+  private void loadOtherFavicons() {
+
   }
 
   public InetSocketAddress getBind() {
@@ -458,8 +467,15 @@ public final class VelocityConfiguration implements ProxyConfig {
   }
 
   @Override
-  public Optional<Favicon> getFavicon() {
-    return Optional.ofNullable(favicon);
+  public Optional<Favicon> getFavicon(String ip) {
+    if (this.favicons == null) {
+      return Optional.empty();
+    }
+    if (this.favicons.containsKey(ip)) {
+      return Optional.ofNullable(this.favicons.get(ip));
+    } else {
+      return Optional.ofNullable(this.favicons.get("default"));
+    }
   }
 
   @Override
@@ -676,7 +692,7 @@ public final class VelocityConfiguration implements ProxyConfig {
         .add("query", query)
         .add("redis", redis)
         .add("queue", queue)
-        .add("favicon", favicon)
+        .add("favicons", favicons)
         .add("enablePlayerAddressLogging", enablePlayerAddressLogging)
         .add("forceKeyAuthentication", forceKeyAuthentication)
         .add("logPlayerConnections", logPlayerConnections)
@@ -770,6 +786,7 @@ public final class VelocityConfiguration implements ProxyConfig {
       final CommentedConfig queueConfig = config.get("queue");
       final CommentedConfig serverLinksConfig = config.get("server-links");
       final CommentedConfig proxyAddressesConfig = config.get("proxy-addresses");
+      final CommentedConfig faviconsConfig = config.get("favicons");
       final CommentedConfig playerCapsConfig = config.get("playercaps");
       final PlayerInfoForwarding forwardingMode = config.getEnumOrElse(
               "player-info-forwarding-mode", PlayerInfoForwarding.NONE);
@@ -845,6 +862,15 @@ public final class VelocityConfiguration implements ProxyConfig {
         }
       }
 
+      final Map<String, Favicon> favicons = new HashMap<>();
+      if (faviconsConfig != null) {
+        for (CommentedConfig.Entry entry : faviconsConfig.entrySet()) {
+          CommentedConfig link = entry.getValue();
+
+          favicons.put(link.get("ip"), Favicon.create(Path.of(link.get("path"))));
+        }
+      }
+
       final Map<String, Integer> playerCaps = new HashMap<>();
 
       if (playerCapsConfig != null) {
@@ -895,7 +921,8 @@ public final class VelocityConfiguration implements ProxyConfig {
               links,
               addresses,
               filter,
-              playerCaps
+              playerCaps,
+              favicons
       );
     }
   }
@@ -1571,6 +1598,7 @@ public final class VelocityConfiguration implements ProxyConfig {
     private int maxConcurrentConnections;
     @Expose
     private @Nullable String proxyId;
+    private String mongodbConnectionString;
 
     private Redis(final CommentedConfig config) {
       if (config == null) {
@@ -1595,6 +1623,8 @@ public final class VelocityConfiguration implements ProxyConfig {
       if (this.proxyId == null || this.proxyId.isEmpty()) {
         this.proxyId = null;
       }
+
+      this.mongodbConnectionString = config.getOrElse("mongodb-connection-string", "");
     }
 
     public boolean isEnabled() {
@@ -1627,6 +1657,10 @@ public final class VelocityConfiguration implements ProxyConfig {
 
     public @Nullable String getProxyId() {
       return proxyId;
+    }
+
+    public String getMongodbConnectionString() {
+      return this.mongodbConnectionString;
     }
 
     @Override

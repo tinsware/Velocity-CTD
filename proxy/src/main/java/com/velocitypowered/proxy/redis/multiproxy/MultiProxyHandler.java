@@ -51,7 +51,7 @@ public class MultiProxyHandler {
 
   private final boolean enabled;
 
-  private int totalPlayerCount;
+  private long totalPlayerCount;
 
   /**
    * Initializes the {@code MultiProxyHandler} to manage multi-proxy functionality
@@ -78,7 +78,7 @@ public class MultiProxyHandler {
     RedisManagerImpl redisManager = this.server.getRedisManager();
 
     Executors.newScheduledThreadPool(1).scheduleAtFixedRate(()
-        -> totalPlayerCount = redisManager.getCache().size(), 100, 100, TimeUnit.MILLISECONDS);
+        -> totalPlayerCount = redisManager.getPlayerCount(), 100, 100, TimeUnit.MILLISECONDS);
 
     redisManager.listen(RedisShuttingDownAnnouncement.ID, RedisShuttingDownAnnouncement.class, it -> {
       handleShutdown(it.proxyId());
@@ -177,13 +177,9 @@ public class MultiProxyHandler {
   }
 
   private void handleLeave(final UUID player) {
-    List<RemotePlayerInfo> info = this.server.getRedisManager().getCache();
-
-    for (RemotePlayerInfo p : info) {
-      if (p.getUuid().equals(player)) {
-        this.server.getRedisManager().removePlayer(p);
-      }
-    }
+    this.server.getRedisManager().getPlayerInfo(player).thenAccept(info -> {
+      this.server.getRedisManager().removePlayer(info);
+    });
   }
 
   private void handleJoin(final RemotePlayerInfo player) {
@@ -237,14 +233,14 @@ public class MultiProxyHandler {
    * @param serverName The name of the server the player is connecting to.
    */
   public void handleServerSwitch(final ConnectedPlayer player, final String serverName) {
-    RemotePlayerInfo info = this.server.getRedisManager().getCache().stream().filter(i -> i.getUuid()
-        .equals(player.getUniqueId())).findFirst().orElse(null);
-    if (info == null) {
-      info = createPlayerInfo(player);
-    }
+    this.server.getRedisManager().getPlayerInfo(player.getUniqueId()).thenAccept(info -> {
+      if (info == null) {
+        info = createPlayerInfo(player);
+      }
 
-    info.setServerName(serverName);
-    this.server.getRedisManager().addOrUpdatePlayer(info);
+      info.setServerName(serverName);
+      this.server.getRedisManager().addOrUpdatePlayer(info);
+    });
   }
 
   /**
@@ -309,7 +305,7 @@ public class MultiProxyHandler {
    *
    * @return the combined player count from this proxy and all other known proxies
    */
-  public int getTotalPlayerCount() {
+  public long getTotalPlayerCount() {
     return totalPlayerCount;
   }
 

@@ -86,7 +86,7 @@ public class GameSpyQueryHandler extends SimpleChannelInboundHandler<DatagramPac
 
   private QueryResponse createInitialResponse() {
 
-    final int online;
+    final long online;
     if (server.getMultiProxyHandler().isRedisEnabled()) {
       online = server.getMultiProxyHandler().getTotalPlayerCount();
     } else {
@@ -98,7 +98,7 @@ public class GameSpyQueryHandler extends SimpleChannelInboundHandler<DatagramPac
             PlainTextComponentSerializer.plainText().serialize(server.getConfiguration().getMotd()))
         .gameVersion(ProtocolVersion.SUPPORTED_VERSION_STRING)
         .map(server.getConfiguration().getQueryMap())
-        .currentPlayers(online)
+        .currentPlayers((int) online)
         .maxPlayers(server.getConfiguration().getShowMaxPlayers())
         .proxyPort(server.getConfiguration().getBind().getPort())
         .proxyHost(server.getConfiguration().getBind().getHostString())

@@ -53,7 +53,7 @@ public class ServerListPingHandler {
     return clientVersion.lessThan(minimumVersion);
   }
 
-  private ServerPing constructLocalPing(ProtocolVersion version) {
+  private ServerPing constructLocalPing(ProtocolVersion version, String ip) {
     boolean fallback = displayFallbackPing(version);
     VelocityConfiguration configuration = server.getConfiguration();
 
@@ -67,7 +67,7 @@ public class ServerListPingHandler {
 
     String serverPingVersion = configuration.getFallbackVersionPing();
 
-    final int online;
+    final long online;
     if (server.getMultiProxyHandler().isRedisEnabled()) {
       online = server.getMultiProxyHandler().getTotalPlayerCount();
     } else {
@@ -83,9 +83,9 @@ public class ServerListPingHandler {
 
     return new ServerPing(
         new ServerPing.Version(version.getProtocol(), formatVersionString(serverPingVersion, version)),
-        new ServerPing.Players(online, configuration.getShowMaxPlayers(), samplePlayers),
+        new ServerPing.Players((int) online, configuration.getShowMaxPlayers(), samplePlayers),
         configuration.getMotd(),
-        configuration.getFavicon().orElse(null),
+        configuration.getFavicon(ip).orElse(null),
         configuration.isAnnounceForge() ? ModInfo.DEFAULT : null
     );
   }
@@ -111,7 +111,7 @@ public class ServerListPingHandler {
                                                                final PingPassthroughMode mode, final List<String> servers,
                                                                final ProtocolVersion responseProtocolVersion,
                                                                final String virtualHostStr) {
-    ServerPing fallback = constructLocalPing(connection.getProtocolVersion());
+    ServerPing fallback = constructLocalPing(connection.getProtocolVersion(), virtualHostStr);
     List<CompletableFuture<ServerPing>> pings = new ArrayList<>();
     for (String s : servers) {
       Optional<RegisteredServer> rs = server.getServer(s);
@@ -194,8 +194,10 @@ public class ServerListPingHandler {
         ? connection.getProtocolVersion() : ProtocolVersion.MAXIMUM_VERSION;
     PingPassthroughMode passthroughMode = configuration.getPingPassthrough();
 
+    Optional<String> ipString = connection.getVirtualHost().map(InetSocketAddress::getHostString);
+    String ip = ipString.orElse("default");
     if (passthroughMode == PingPassthroughMode.DISABLED) {
-      return CompletableFuture.completedFuture(constructLocalPing(shownVersion));
+      return CompletableFuture.completedFuture(constructLocalPing(shownVersion, ip));
     } else {
       String virtualHostStr = connection.getVirtualHost().map(InetSocketAddress::getHostString)
           .map(str -> str.toLowerCase(Locale.ROOT))

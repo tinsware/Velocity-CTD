@@ -29,9 +29,9 @@ import com.velocitypowered.proxy.plugin.virtual.VelocityVirtualPlugin;
 import com.velocitypowered.proxy.queue.ServerQueueEntry;
 import com.velocitypowered.proxy.queue.ServerQueueStatus;
 import com.velocitypowered.proxy.queue.cache.SerializableQueue;
+import com.velocitypowered.proxy.queue.cache.SerializableQueueEntry;
 import com.velocitypowered.proxy.redis.multiproxy.RedisGetPlayerPingRequest;
 import com.velocitypowered.proxy.redis.multiproxy.RedisKickPlayerRequest;
-import com.velocitypowered.proxy.redis.multiproxy.RedisPlayerSetTransferringRequest;
 import com.velocitypowered.proxy.redis.multiproxy.RedisSendMessage;
 import com.velocitypowered.proxy.redis.multiproxy.RedisSendMessageToUuidRequest;
 import com.velocitypowered.proxy.redis.multiproxy.RedisServerAlertRequest;
@@ -43,6 +43,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -59,7 +61,6 @@ import redis.clients.jedis.JedisClientConfig;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
 import redis.clients.jedis.JedisPubSub;
-import redis.clients.jedis.exceptions.JedisDataException;
 
 /**
  * Manages Redis connectivity and communication within the Velocity proxy.
@@ -71,15 +72,13 @@ import redis.clients.jedis.exceptions.JedisDataException;
  */
 public class RedisManagerImpl {
   private static final String CHANNEL = "velocityredis";
-  private static final String CACHE_KEY = "remote-players";
-  private static final String QUEUE_CACHE_KEY = "queue-cache";
 
   private static final Logger logger = LoggerFactory.getLogger(RedisManagerImpl.class);
   private static final Gson gson = new Gson();
 
   private @MonotonicNonNull JedisPool jedisPool;
   private final VelocityPubSub pubSub;
-  private final AsyncPlayerCache asyncPlayerCache;
+  private final DatabaseManager databaseManager;
 
   /**
    * Constructs a Redis manager using the given Velocity server instance to retrieve
@@ -95,8 +94,7 @@ public class RedisManagerImpl {
       this.start(redisConfig, velocityServer);
     }
 
-    int threadPoolSize = Math.max(1, Runtime.getRuntime().availableProcessors() / 8);
-    asyncPlayerCache = new AsyncPlayerCache(CACHE_KEY, jedisPool, gson, threadPoolSize);
+    databaseManager = new DatabaseManager(velocityServer);
 
     registerListeners(velocityServer);
   }
@@ -146,12 +144,6 @@ public class RedisManagerImpl {
       ConnectedPlayer connectedPlayer = (ConnectedPlayer) proxy.getPlayer(it.player()).orElse(null);
       if (connectedPlayer == null) {
         return;
-      }
-
-      if (connectedPlayer.getProtocolVersion().noLessThan(ProtocolVersion.MINECRAFT_1_20_5)) {
-        String connectedServer = connectedPlayer.getConnectedServer() != null ? connectedPlayer.getConnectedServer().getServerInfo().getName() : null;
-        send(new RedisPlayerSetTransferringRequest(connectedPlayer.getUniqueId(), true,
-            connectedServer));
       }
 
       proxy.getScheduler().buildTask(VelocityVirtualPlugin.INSTANCE, () -> {
@@ -273,11 +265,11 @@ public class RedisManagerImpl {
    * @param player The player to update.
    */
   public void addOrUpdatePlayer(final RemotePlayerInfo player) {
-    if (this.jedisPool == null) {
+    if (this.jedisPool == null || this.databaseManager == null) {
       return;
     }
 
-    asyncPlayerCache.addOrUpdatePlayer(player);
+    databaseManager.addOrUpdatePlayers(List.of(player));
   }
 
   /**
@@ -286,10 +278,11 @@ public class RedisManagerImpl {
    * @param info The player to update.
    */
   public void removePlayer(final RemotePlayerInfo info) {
-    if (this.jedisPool == null) {
+    if (this.jedisPool == null || this.databaseManager == null) {
       return;
     }
-    asyncPlayerCache.removePlayer(info);
+
+    databaseManager.removePlayers(List.of(info));
   }
 
   /**
@@ -298,10 +291,41 @@ public class RedisManagerImpl {
    * @return the list of players.
    */
   public List<RemotePlayerInfo> getCache() {
-    if (this.jedisPool == null) {
+    if (this.jedisPool == null || this.databaseManager == null) {
       return new ArrayList<>();
     }
-    return asyncPlayerCache.getCache();
+
+    return databaseManager.getPlayers();
+  }
+
+
+  /**
+   * Get the total player count (optimized, lightning fast).
+   *
+   * @return The total player count.
+   */
+  public long getPlayerCount() {
+    if (this.jedisPool == null || this.databaseManager == null) {
+      return 0;
+    }
+
+    return databaseManager.getCount();
+  }
+
+
+  /**
+   * Get a player info by player UUID.
+   *
+   * @param playerUuid The UUID of the player.
+   *
+   * @return The found player info, or null.
+   */
+  public CompletableFuture<RemotePlayerInfo> getPlayerInfo(UUID playerUuid) {
+    if (this.jedisPool == null || this.databaseManager == null) {
+      return null;
+    }
+
+    return databaseManager.getPlayer(playerUuid);
   }
 
   /**
@@ -310,17 +334,11 @@ public class RedisManagerImpl {
    * @param queue The queue to add or update.
    */
   public void addOrUpdateQueue(final ServerQueueStatus queue) {
-    if (this.jedisPool == null) {
+    if (this.jedisPool == null || this.databaseManager == null) {
       return;
     }
 
-    try (Jedis jedis = this.jedisPool.getResource()) {
-      jedis.hset(QUEUE_CACHE_KEY, queue.getServerName(), gson.toJson(new SerializableQueue(queue)));
-    } catch (JedisDataException ignored) {
-      // Ignore raw hash due to redundant logging.
-    } catch (Exception e) {
-      e.printStackTrace();
-    }
+    this.databaseManager.addOrUpdateQueue(new SerializableQueue(queue));
   }
 
   /**
@@ -329,26 +347,17 @@ public class RedisManagerImpl {
    * @param serverQueueEntry The entry to update.
    */
   public void addOrUpdateEntry(final ServerQueueEntry serverQueueEntry) {
-    if (this.jedisPool == null) {
+    if (this.jedisPool == null || this.databaseManager == null) {
       return;
     }
 
-    ServerQueueStatus status = getQueue(serverQueueEntry.getTarget().getServerInfo().getName())
-        .convert(serverQueueEntry.getProxy(), serverQueueEntry.getTarget());
-    if (status == null) {
-      return;
-    }
-
-    ServerQueueEntry entry = status.getEntry(serverQueueEntry.getPlayer()).orElse(null);
-    if (entry == null) {
-      return;
-    }
-    entry.update(serverQueueEntry.getConnectionAttempts(), serverQueueEntry.isWaitingForConnection(),
+    databaseManager.addOrUpdateQueueEntry(serverQueueEntry.getTarget().getServerInfo().getName(),
+        new SerializableQueueEntry(serverQueueEntry.getPlayer(),
+        serverQueueEntry.getConnectionAttempts(),
+        serverQueueEntry.isWaitingForConnection(),
         serverQueueEntry.getPriority(),
         serverQueueEntry.isFullBypass(),
-        serverQueueEntry.isQueueBypass());
-
-    addOrUpdateQueue(status);
+        serverQueueEntry.isQueueBypass()));
   }
 
   /**
@@ -362,16 +371,8 @@ public class RedisManagerImpl {
       return null;
     }
 
-    try (Jedis jedis = this.jedisPool.getResource()) {
-      String json = jedis.hget(QUEUE_CACHE_KEY, serverName);
-      if (json == null) {
-        return null; // Key does not exist
-      }
-      return gson.fromJson(json, SerializableQueue.class);
-    } catch (Exception e) {
-      e.printStackTrace();
-      return null; // Return null in case of an error
-    }
+
+    return databaseManager.getQueue(serverName);
   }
 
   /**
@@ -384,14 +385,7 @@ public class RedisManagerImpl {
       return new ArrayList<>();
     }
 
-    try (Jedis jedis = this.jedisPool.getResource()) {
-      Map<String, String> queueMap = jedis.hgetAll(QUEUE_CACHE_KEY);
-      return queueMap.values().stream()
-          .map(json -> gson.fromJson(json, SerializableQueue.class))
-          .collect(Collectors.toList());
-    } catch (Exception e) {
-      return new ArrayList<>();
-    }
+    return databaseManager.getAllQueues();
   }
 
   private void start(final VelocityConfiguration.Redis redisConfig, final VelocityServer server) {

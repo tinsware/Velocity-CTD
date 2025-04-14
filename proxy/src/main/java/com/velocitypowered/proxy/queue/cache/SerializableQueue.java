@@ -29,11 +29,29 @@ import java.util.concurrent.ConcurrentLinkedDeque;
  * Represents a serializable queue.
  */
 public class SerializableQueue {
-  private final Deque<SerializableQueueEntry> queue = new ConcurrentLinkedDeque<>();
+  private final Deque<SerializableQueueEntry> queue;
   private final String serverName;
   private final ServerStatus online;
   private final boolean full;
   private final boolean paused;
+
+
+  /**
+   * Constructs a new serializable queue.
+   *
+   * @param queue The list of entries.
+   * @param serverName The server name.
+   * @param online The server status.
+   * @param full Whether the queue is full.
+   * @param paused Whether the queue is paused.
+   */
+  public SerializableQueue(Deque<SerializableQueueEntry> queue, String serverName, ServerStatus online, boolean full, boolean paused) {
+    this.queue = queue;
+    this.serverName = serverName;
+    this.online = online;
+    this.full = full;
+    this.paused = paused;
+  }
 
   /**
    * Constructs a new serializable queue.
@@ -41,6 +59,7 @@ public class SerializableQueue {
    * @param status The real queue.
    */
   public SerializableQueue(final ServerQueueStatus status) {
+    queue = new ConcurrentLinkedDeque<>();
     status.getQueue().forEach(e -> {
       queue.add(new SerializableQueueEntry(e.getPlayer(),
           e.getConnectionAttempts(),

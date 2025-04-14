@@ -133,7 +133,7 @@ public interface ProxyConfig {
    *
    * @return optional favicon
    */
-  Optional<Favicon> getFavicon();
+  Optional<Favicon> getFavicon(String ip);
 
   /**
    * Get whether this proxy displays that it supports Forge/FML.
