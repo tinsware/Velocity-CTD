@@ -512,3 +512,13 @@ port = 25566
 [favicons.Example]
 ip = "play.example.com"
 path = "example-icon.png"
+
+
+[motds]
+# This allows you to assign different motds per domain.
+# This is especially useful if you have different domains pointing to your network,
+# and you're looking for different MOTDs per domain.
+
+[motds.Example]
+ip = "play.example.com"
+motd = "<#ff3a4c>A Velocity Server"

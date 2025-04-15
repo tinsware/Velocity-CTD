@@ -95,7 +95,7 @@ public class GameSpyQueryHandler extends SimpleChannelInboundHandler<DatagramPac
 
     return QueryResponse.builder()
         .hostname(
-            PlainTextComponentSerializer.plainText().serialize(server.getConfiguration().getMotd()))
+            PlainTextComponentSerializer.plainText().serialize(server.getConfiguration().getMotd("default")))
         .gameVersion(ProtocolVersion.SUPPORTED_VERSION_STRING)
         .map(server.getConfiguration().getQueryMap())
         .currentPlayers((int) online)

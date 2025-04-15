@@ -84,7 +84,7 @@ public class ServerListPingHandler {
     return new ServerPing(
         new ServerPing.Version(version.getProtocol(), formatVersionString(serverPingVersion, version)),
         new ServerPing.Players((int) online, configuration.getShowMaxPlayers(), samplePlayers),
-        configuration.getMotd(),
+        configuration.getMotd(ip),
         configuration.getFavicon(ip).orElse(null),
         configuration.isAnnounceForge() ? ModInfo.DEFAULT : null
     );

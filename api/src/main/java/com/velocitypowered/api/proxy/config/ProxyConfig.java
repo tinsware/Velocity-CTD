@@ -51,7 +51,7 @@ public interface ProxyConfig {
    *
    * @return the motd component
    */
-  net.kyori.adventure.text.Component getMotd();
+  net.kyori.adventure.text.Component getMotd(String ip);
 
   /**
    * Get the MOTD hover legacy component shown in the tab list.

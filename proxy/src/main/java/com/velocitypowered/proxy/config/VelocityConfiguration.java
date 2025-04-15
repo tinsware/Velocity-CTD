@@ -48,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
+import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.apache.logging.log4j.LogManager;
@@ -66,8 +67,8 @@ public final class VelocityConfiguration implements ProxyConfig {
   @Expose
   private String bind = "0.0.0.0:25565";
   @Expose
-  private String motd = "<aqua>A Velocity Server";
-  private net.kyori.adventure.text.@MonotonicNonNull Component motdAsComponent;
+  private Map<String, String> motd = new HashMap<>();
+  private Map<String, net.kyori.adventure.text.@MonotonicNonNull Component> motdAsComponent;
   @Expose
   private List<String> motdHover = List.of("");
   private List<net.kyori.adventure.text.@MonotonicNonNull Component> motdHoverComponents;
@@ -143,7 +144,7 @@ public final class VelocityConfiguration implements ProxyConfig {
     this.queue = queue;
   }
 
-  private VelocityConfiguration(final String bind, final String motd, final List<String> motdHover,
+  private VelocityConfiguration(final String bind, final Map<String, String> motd, final List<String> motdHover,
                                 final int showMaxPlayers, final boolean onlineMode,
                                 final boolean preventClientProxyConnections, final boolean announceForge,
                                 final PlayerInfoForwarding playerInfoForwardingMode, final byte[] forwardingSecret,
@@ -305,7 +306,7 @@ public final class VelocityConfiguration implements ProxyConfig {
     }
 
     try {
-      getMotd();
+      getMotd("default");
     } catch (Exception e) {
       logger.error("Can't parse your MOTD", e);
       valid = false;
@@ -363,10 +364,6 @@ public final class VelocityConfiguration implements ProxyConfig {
     }
   }
 
-  private void loadOtherFavicons() {
-
-  }
-
   public InetSocketAddress getBind() {
     return AddressUtil.parseAndResolveAddress(bind);
   }
@@ -392,11 +389,19 @@ public final class VelocityConfiguration implements ProxyConfig {
   }
 
   @Override
-  public net.kyori.adventure.text.Component getMotd() {
+  public net.kyori.adventure.text.Component getMotd(String ip) {
     if (motdAsComponent == null) {
-      motdAsComponent = MiniMessage.miniMessage().deserialize(motd);
+      motdAsComponent = new HashMap<>();
     }
-    return motdAsComponent;
+
+    if (this.motdAsComponent.containsKey(ip)) {
+      return motdAsComponent.get(ip);
+    } else {
+      Component component = MiniMessage.miniMessage().deserialize(this.motd.getOrDefault(ip, this.motd.get("default")));
+      this.motdAsComponent.put(ip, component);
+
+      return component;
+    }
   }
 
   @Override
@@ -471,6 +476,7 @@ public final class VelocityConfiguration implements ProxyConfig {
     if (this.favicons == null) {
       return Optional.empty();
     }
+
     if (this.favicons.containsKey(ip)) {
       return Optional.ofNullable(this.favicons.get(ip));
     } else {
@@ -772,7 +778,7 @@ public final class VelocityConfiguration implements ProxyConfig {
         }
       }
       final byte[] forwardingSecret = forwardingSecretString.getBytes(StandardCharsets.UTF_8);
-      final String motd = config.getOrElse("motd", "<#09add3>A Velocity Server");
+
       final List<String> motdHover = config.getOrElse("motd-hover", new ArrayList<>());
 
       // Read the rest of the config
@@ -787,6 +793,7 @@ public final class VelocityConfiguration implements ProxyConfig {
       final CommentedConfig serverLinksConfig = config.get("server-links");
       final CommentedConfig proxyAddressesConfig = config.get("proxy-addresses");
       final CommentedConfig faviconsConfig = config.get("favicons");
+      final CommentedConfig motdsConfig = config.get("motds");
       final CommentedConfig playerCapsConfig = config.get("playercaps");
       final PlayerInfoForwarding forwardingMode = config.getEnumOrElse(
               "player-info-forwarding-mode", PlayerInfoForwarding.NONE);
@@ -867,7 +874,17 @@ public final class VelocityConfiguration implements ProxyConfig {
         for (CommentedConfig.Entry entry : faviconsConfig.entrySet()) {
           CommentedConfig link = entry.getValue();
 
-          favicons.put(link.get("ip"), Favicon.create(Path.of(link.get("path"))));
+          favicons.put(link.get("ip"), Favicon.create(Path.of((String) (link.get("path")))));
+        }
+      }
+
+      Map<String, String> motds = new HashMap<>();
+      motds.put("default", "<#09add3>A Velocity Server");
+      if (motdsConfig != null) {
+        for (CommentedConfig.Entry entry : motdsConfig.entrySet()) {
+          CommentedConfig link = entry.getValue();
+
+          motds.put(link.get("ip"), link.get("motd"));
         }
       }
 
@@ -889,7 +906,7 @@ public final class VelocityConfiguration implements ProxyConfig {
 
       return new VelocityConfiguration(
               bind,
-              motd,
+              motds,
               motdHover,
               maxPlayers,
               onlineMode,
